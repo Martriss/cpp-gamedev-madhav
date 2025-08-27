@@ -1,0 +1,8 @@
+# Build directory
+build/
+
+# Cache directories
+.cache/
+
+# Junk
+.DS_Store
