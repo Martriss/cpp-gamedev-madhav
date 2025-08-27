@@ -35,9 +35,11 @@ private:
   // Game should continue to run
   bool mIsRunning;
   SDL_Renderer *mRenderer;
-  Vector2 mPaddlePos;
+  Vector2 mLeftPaddlePos;
+  Vector2 mRightPaddlePos;
   Vector2 mBallPos;
   Uint32 mTicksCount;
-  int mPaddleDir;
+  int mLeftPaddleDir;
+  int mRightPaddleDir;
   Vector2 mBallVel;
 };
