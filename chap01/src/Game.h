@@ -1,8 +1,17 @@
+#pragma once
 #include <SDL.h>
 
+// Game constants
+constexpr int thickness{15};
+constexpr int paddleH{100};
+constexpr float windowWidth{1024.0f};
+constexpr float windowHeight{768.0f};
+constexpr float paddleSpeed{300.0f};
+constexpr float targetFrameTime{16.0f};
+
 struct Vector2 {
-    float x;
-    float y;
+  float x;
+  float y;
 };
 
 class Game {

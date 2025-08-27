@@ -1,11 +1,11 @@
 #include "Game.h"
-
-const int thickness{15};
-const int paddleH{100};
+#include <SDL_blendmode.h>
+#include <SDL_render.h>
 
 Game::Game()
-    : mWindow(nullptr), mIsRunning(true), mBallPos({512, 384}),
-      mPaddlePos({10, 384}), mTicksCount(0), mPaddleDir(0),
+    : mWindow(nullptr), mIsRunning(true),
+      mBallPos({windowWidth / 2, windowHeight / 2}),
+      mPaddlePos({10, windowHeight / 2}), mTicksCount(0), mPaddleDir(0),
       mBallVel({-200.0f, 235.0f}) {}
 
 bool Game::Initialize() {
@@ -18,7 +18,7 @@ bool Game::Initialize() {
 
   mWindow = SDL_CreateWindow("Game Programming in C++ (Chapter 01)",
                              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                             1024, 768, SDL_WINDOW_SHOWN);
+                             windowWidth, windowHeight, 0);
 
   if (!mWindow) {
     SDL_Log("Failed to create window: %s", SDL_GetError());
@@ -80,7 +80,7 @@ void Game::ProcessInput() {
 
 void Game::UpdateGame() {
   // Frame limiting: at 60fps each frame is ~16ms
-  while (!SDL_TICKS_PASSED(SDL_GetTicks(), mTicksCount + 16))
+  while (!SDL_TICKS_PASSED(SDL_GetTicks(), mTicksCount + targetFrameTime))
     ;
 
   // Calculate delta time: the diff in tick between current and last frame
@@ -93,12 +93,12 @@ void Game::UpdateGame() {
 
   // Paddle movement
   if (mPaddleDir != 0) {
-    mPaddlePos.y += mPaddleDir * 300.0f * deltaTime;
+    mPaddlePos.y += mPaddleDir * paddleSpeed * deltaTime;
 
     if (mPaddlePos.y < (paddleH / 2.0f + thickness)) {
       mPaddlePos.y = paddleH / 2.0f + thickness;
-    } else if (mPaddlePos.y > (768.0f - paddleH / 2.0f - thickness)) {
-      mPaddlePos.y = 768.0f - paddleH / 2.0f - thickness;
+    } else if (mPaddlePos.y > (windowHeight - paddleH / 2.0f - thickness)) {
+      mPaddlePos.y = windowHeight - paddleH / 2.0f - thickness;
     }
   }
 
@@ -113,15 +113,18 @@ void Game::UpdateGame() {
   if (diff <= paddleH / 2.0f && mBallPos.x <= 25.0f && mBallPos.x >= 20.0f &&
       mBallVel.x < 0.0f) {
     mBallVel.x *= -1.0f;
+  } else if (mBallPos.x < 0.0f) {
+    mIsRunning = false;
   }
+
   // Top collision
   if (mBallPos.y <= thickness && mBallVel.y < 0.0f) {
     mBallVel.y *= -1.0f;
     // Bottom collision
-  } else if (mBallPos.y >= (768.0f - thickness) && mBallVel.y > 0.0f) {
+  } else if (mBallPos.y >= (windowHeight - thickness) && mBallVel.y > 0.0f) {
     mBallVel.y *= -1.0f;
     // Right collision
-  } else if (mBallPos.x >= (1024.0f - thickness) && mBallVel.x > 0.0f) {
+  } else if (mBallPos.x >= (windowWidth - thickness) && mBallVel.x > 0.0f) {
     mBallVel.x *= -1.0f;
   }
 }
@@ -140,29 +143,29 @@ void Game::GenerateOutput() {
   SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 255);
 
   // Top wall
-  SDL_Rect wall{0, 0, 1024, thickness};
+  SDL_Rect wall{0, 0, static_cast<int>(windowWidth), thickness};
   SDL_RenderFillRect(mRenderer, &wall);
 
   // Bottom wall
-  wall.y = 768 - thickness;
+  wall.y = windowHeight - thickness;
   SDL_RenderFillRect(mRenderer, &wall);
 
   // Right wall
-  wall.x = 1024 - thickness;
+  wall.x = windowWidth - thickness;
   wall.y = 0;
   wall.w = thickness;
-  wall.h = 1024;
+  wall.h = windowWidth;
   SDL_RenderFillRect(mRenderer, &wall);
 
   // Ball
-  SDL_Rect ball{static_cast<int>(mBallPos.x - thickness / 2),
-                static_cast<int>(mBallPos.y - thickness / 2), thickness,
+  SDL_Rect ball{static_cast<int>(mBallPos.x - thickness / 2.0f),
+                static_cast<int>(mBallPos.y - thickness / 2.0f), thickness,
                 thickness};
   SDL_RenderFillRect(mRenderer, &ball);
 
   // Paddle
-  SDL_Rect paddle{static_cast<int>(mPaddlePos.x - thickness / 2),
-                  static_cast<int>(mPaddlePos.y - paddleH / 2), thickness,
+  SDL_Rect paddle{static_cast<int>(mPaddlePos.x - thickness / 2.0f),
+                  static_cast<int>(mPaddlePos.y - paddleH / 2.0f), thickness,
                   paddleH};
   SDL_RenderFillRect(mRenderer, &paddle);
 
