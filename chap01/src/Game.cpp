@@ -1,13 +1,11 @@
 #include "Game.h"
-#include <SDL_blendmode.h>
-#include <SDL_render.h>
 
 Game::Game()
-    : mWindow(nullptr), mIsRunning(true),
-      mBallPos({windowWidth / 2, windowHeight / 2}),
-      mLeftPaddlePos({10, windowHeight / 2}),
-      mRightPaddlePos({windowWidth - 10, windowHeight / 2}), mTicksCount(0),
-      mLeftPaddleDir(0), mRightPaddleDir(0), mBallVel({-200.0f, 235.0f}) {}
+    : mWindow{nullptr}, mIsRunning{true}, mLeftPaddlePos{10, windowHeight / 2},
+      mRightPaddlePos{windowWidth - 10, windowHeight / 2}, mTicksCount{0},
+      mLeftPaddleDir{0}, mRightPaddleDir{0}, mBalls{},
+      mRandomEngine{std::random_device{}()}, mVelXDist{-300.0f, 300.0f},
+      mVelYDist{-200.0f, 200.0f} {}
 
 bool Game::Initialize() {
 
@@ -35,6 +33,13 @@ bool Game::Initialize() {
   if (!mRenderer) {
     SDL_Log("Failed to create renderer: %s", SDL_GetError());
     return false;
+  }
+
+  mBalls.reserve(ballsNumber);
+
+  const Vector2 center{windowWidth / 2.0f, windowHeight / 2.0f};
+  for (int i = 0; i < ballsNumber; ++i) {
+    mBalls.emplace_back(Ball{center, RandomVelocity()});
   }
 
   return true;
@@ -123,38 +128,91 @@ void Game::UpdateGame() {
     }
   }
 
-  // Ball movement
-  mBallPos.x += mBallVel.x * deltaTime;
-  mBallPos.y += mBallVel.y * deltaTime;
+  for (auto it = mBalls.begin(); it != mBalls.end();) {
+    Ball &ball = *it;
 
-  // Left paddle collision
-  float leftDiff = mLeftPaddlePos.y - mBallPos.y;
-  leftDiff = (leftDiff > 0.0f) ? leftDiff : -leftDiff;
+    // Ball movement
+    ball.pos.x += ball.vel.x * deltaTime;
+    ball.pos.y += ball.vel.y * deltaTime;
 
-  if (leftDiff <= paddleH / 2.0f && mBallPos.x <= 25.0f &&
-      mBallPos.x >= 20.0f && mBallVel.x < 0.0f) {
-    mBallVel.x *= -1.0f;
-  } else if (mBallPos.x < 0.0f) {
-    mIsRunning = false;
+    // Remove out of bounds balls
+    if (ball.pos.x < 0.0f || ball.pos.x > windowWidth) {
+      it = mBalls.erase(it);
+      continue;
+    }
+
+    // Left paddle collision
+    float leftDiff = mLeftPaddlePos.y - ball.pos.y;
+    leftDiff = (leftDiff > 0.0f) ? leftDiff : -leftDiff;
+
+    if (leftDiff <= paddleH / 2.0f && ball.pos.x <= 25.0f &&
+        ball.pos.x >= 20.0f && ball.vel.x < 0.0f) {
+      ball.vel.x *= -1.0f;
+    }
+
+    // Right paddle collision
+    float rightDiff = mRightPaddlePos.y - ball.pos.y;
+    rightDiff = (rightDiff > 0.0f) ? rightDiff : -rightDiff;
+
+    if (rightDiff <= paddleH / 2.0f && ball.pos.x >= windowWidth - 25.0f &&
+        ball.pos.x <= windowWidth - 20.0f && ball.vel.x > 0.0f) {
+      ball.vel.x *= -1.0f;
+    }
+
+    // Top collision
+    if (ball.pos.y <= thickness && ball.vel.y < 0.0f) {
+      ball.vel.y *= -1.0f;
+      // Bottom collision
+    } else if (ball.pos.y >= (windowHeight - thickness) && ball.vel.y > 0.0f) {
+      ball.vel.y *= -1.0f;
+    }
+
+    ++it;
   }
 
-  // Right paddle collision
-  float rightDiff = mRightPaddlePos.y - mBallPos.y;
-  rightDiff = (rightDiff > 0.0f) ? rightDiff : -rightDiff;
+  // Ball intercollisions
+  if (activateCollision) {
+    for (size_t i = 0; i < mBalls.size(); ++i) {
+      for (size_t j = i + 1; j < mBalls.size(); ++j) {
+        Ball &ball1 = mBalls[i];
+        Ball &ball2 = mBalls[j];
 
-  if (rightDiff <= paddleH / 2.0f && mBallPos.x >= windowWidth - 25.0f &&
-      mBallPos.x <= windowWidth - 20.0f && mBallVel.x > 0.0f) {
-    mBallVel.x *= -1.0f;
-  } else if (mBallPos.x > windowWidth) {
-    mIsRunning = false;
+        float dx = ball1.pos.x - ball2.pos.x;
+        float dy = ball1.pos.y - ball2.pos.y;
+        float distanceSquared = dx * dx + dy * dy;
+        float minDist = thickness;
+
+        if (distanceSquared < minDist * minDist) {
+          float distance = std::sqrt(distanceSquared);
+
+          // Prevent by 0 division
+          if (distance < 1.0f)
+            distance = 1.0f;
+
+          // Separate balls
+          float overlap = (minDist - distance) / 2.0f;
+          float separateX = (dx / distance) * overlap;
+          float separateY = (dy / distance) * overlap;
+
+          ball1.pos.x += separateX;
+          ball1.pos.y += separateY;
+          ball2.pos.x -= separateX;
+          ball2.pos.y -= separateY;
+
+          // Swap velocities
+          float tempVelX = ball1.vel.x;
+          float tempVelY = ball1.vel.y;
+          ball1.vel.x = ball2.vel.x;
+          ball1.vel.y = ball2.vel.y;
+          ball2.vel.x = tempVelX;
+          ball2.vel.y = tempVelY;
+        }
+      }
+    }
   }
 
-  // Top collision
-  if (mBallPos.y <= thickness && mBallVel.y < 0.0f) {
-    mBallVel.y *= -1.0f;
-    // Bottom collision
-  } else if (mBallPos.y >= (windowHeight - thickness) && mBallVel.y > 0.0f) {
-    mBallVel.y *= -1.0f;
+  if (mBalls.empty()) {
+    mIsRunning = false;
   }
 }
 
@@ -180,11 +238,12 @@ void Game::GenerateOutput() {
   SDL_RenderFillRect(mRenderer, &wall);
 
   // Ball
-  SDL_Rect ball{static_cast<int>(mBallPos.x - thickness / 2.0f),
-                static_cast<int>(mBallPos.y - thickness / 2.0f), thickness,
-                thickness};
-  SDL_RenderFillRect(mRenderer, &ball);
-
+  for (auto &ball : mBalls) {
+    SDL_Rect ballRect{static_cast<int>(ball.pos.x - thickness / 2.0f),
+                      static_cast<int>(ball.pos.y - thickness / 2.0f),
+                      thickness, thickness};
+    SDL_RenderFillRect(mRenderer, &ballRect);
+  }
   // Paddle
   SDL_Rect leftPaddle{static_cast<int>(mLeftPaddlePos.x - thickness / 2.0f),
                       static_cast<int>(mLeftPaddlePos.y - paddleH / 2.0f),
@@ -198,4 +257,13 @@ void Game::GenerateOutput() {
 
   // Buffer swap
   SDL_RenderPresent(mRenderer);
+}
+
+Vector2 Game::RandomVelocity() {
+  float velX = mVelXDist(mRandomEngine);
+  if (std::abs(velX) < 200.0f) {
+    velX = (velX >= 0) ? 200.0f : -200.0f;
+  }
+
+  return {velX, mVelYDist(mRandomEngine)};
 }
